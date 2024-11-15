@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMS Viewer</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+	<!-- Dark Mode Stylesheet (dynamically loaded via JavaScript) -->
+	<link id="dark-mode-styles" rel="stylesheet" href="#" disabled>
+
+    <script defer src="script.js"></script>
+    <style>
+        /* Layout styles */
+        #contact-list {
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+            background-color: #fff;
+            border: 1px solid #ced4da;
+        }
+
+        #chat-window {
+            max-height: calc(100vh - 250px);
+            overflow-y: auto;
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border: 1px solid #ced4da;
+            border-radius: 8px;
+        }
+
+        /* Drag-and-drop area */
+        #upload-area {
+            background-color: #e9ecef;
+            color: #495057;
+            border: 2px dashed #adb5bd;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        #upload-area:hover {
+            background-color: #dee2e6;
+        }
+
+
+        .search-icon {
+            margin-right: 5px;
+        }
+
+        /* Message styles */
+        .card.incoming {
+            background-color: #f0f9ff;
+            color: #212529;
+        }
+
+        .card.outgoing {
+            background-color: #d1ecf1;
+            color: #212529;
+        }
+
+        .card-footer {
+            font-size: 0.85rem;
+            color: #495057;
+        }
+
+        /* Dark mode styles */
+        body.dark-mode {
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode #chat-window {
+            background-color: #1e1e1e;
+            border-color: #333;
+        }
+
+        body.dark-mode .list-group-item {
+            background-color: #1e1e1e;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .btn {
+            background-color: #333;
+            color: #e0e0e0;
+            border-color: #444;
+        }
+
+        body.dark-mode .btn-outline-primary {
+            color: #fff;
+            border-color: #555;
+        }
+
+		/* Styling for the export dropdown menu */
+		.dropdown-menu {
+			min-width: 150px; /* Ensure a consistent size */
+		}
+
+		.dropdown-menu-end {
+			right: 0;
+			left: auto;
+		}
+
+		/* Initial state for the search bar (collapsed) */
+		.search-bar-collapsed {
+			max-height: 0;
+			overflow: hidden;
+			opacity: 0;
+			transition: max-height 0.5s ease, opacity 0.3s ease;
+		}
+
+		/* Expanded state for the search bar */
+		.search-bar-expanded {
+			max-height: 100px; /* Passe den Wert an die tatsächliche Höhe der Suchleiste an */
+			opacity: 1;
+			overflow: visible;
+			transition: max-height 0.5s ease, opacity 0.3s ease;
+		}
+#stats-container,
+#top-contacts-container {
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    padding: 1rem;
+    background-color: #f8f9fa;
+}
+
+.stat-item,
+.top-contact-item {
+    border-bottom: 1px solid #dee2e6;
+    padding: 0.5rem 0;
+}
+
+.stat-item:last-child,
+.top-contact-item:last-child {
+    border-bottom: none;
+}
+
+h5 {
+    font-weight: bold;
+}
+
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1>SMS Viewer</h1>
+            <button id="dark-mode-toggle" class="btn btn-light">🌙 Dark Mode</button>
+        </div>
+
+        <!-- Drag and Drop Area -->
+        <div id="upload-area" class="p-4 rounded text-center mb-4">
+            <h5><i class="fa-solid fa-cloud-upload-alt"></i> Drag & Drop your SMS XML file here</h5>
+            <p>or click to upload</p>
+            <input type="file" id="file-input" accept=".xml" style="display: none;">
+        </div>
+
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3">
+				<div class="position-relative mb-3">
+					<!-- Search Bar for Contacts -->
+					<input type="text" id="contact-search" class="form-control" placeholder="Search contacts...">
+					<select id="contact-filter" class="form-select mt-2">
+						<option value="all">All Contacts</option>
+						<option value="named">Only Named Contacts</option>
+						<option value="unknown">Only 'Unknown'</option>
+					</select>
+				</div>
+                <ul id="contact-list" class="list-group">
+                    <!-- Contacts will be dynamically populated -->
+                </ul>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9">
+
+
+				<div class="d-flex justify-content-between align-items-center mb-3">
+					<div>
+						<button id="toggle-search" class="btn btn-outline-secondary btn-sm mx-1">
+							<i class="fas fa-search"></i> Search
+						</button>
+					</div>
+                <!-- Export and Search Controls -->
+					<div class="btn-group">
+						<button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+							Export
+						</button>
+						<ul class="dropdown-menu">
+							<li><a class="dropdown-item" id="export-csv" href="#"><i class="fa-solid fa-file-csv fa-fw"></i> Export CSV</a></li>
+							<li><a class="dropdown-item" id="export-pdf" href="#"><i class="fa-solid fa-file-pdf fa-fw"></i> Export PDF</a></li>
+							<li><a class="dropdown-item" id="export-json" href="#"><i class="fa-solid fa-file-code fa-fw"></i> Export JSON</a></li>
+						</ul>
+					</div>
+				</div>
+                <!-- Search Bar -->
+				<div id="search-bar-container" class="search-bar-collapsed mb-3">
+					<input type="text" id="conversation-search" class="form-control" placeholder="Search in conversation...">
+				</div>
+
+
+								<!-- Chat Window -->
+                <div id="chat-window">
+                    <p class="text-center text-muted">Select a contact to view messages</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+
+</body>
+</html>

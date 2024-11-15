@@ -1,0 +1,108 @@
+/* Body and Background */
+body.dark-mode {
+    background-color: #121212;
+    color: #e0e0e0;
+}
+
+/* Sidebar Styling */
+body.dark-mode #contact-list {
+    background-color: #1e1e1e;
+    border-color: #333;
+    color: #e0e0e0;
+}
+
+body.dark-mode .list-group-item {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+}
+
+body.dark-mode .list-group-item:hover {
+    background-color: #333;
+    color: #ffffff;
+}
+
+/* Chat Window */
+body.dark-mode #chat-window {
+    background-color: #1e1e1e;
+    border-color: #333;
+}
+
+body.dark-mode .card.incoming {
+    background-color: #263238;
+    color: #e0e0e0;
+}
+
+body.dark-mode .card.outgoing {
+    background-color: #37474f;
+    color: #e0e0e0;
+}
+
+body.dark-mode .card-footer {
+    color: #b0bec5;
+}
+
+/* Buttons */
+body.dark-mode .btn {
+    background-color: #333;
+    color: #e0e0e0;
+    border-color: #555;
+}
+
+body.dark-mode .btn:hover {
+    background-color: #444;
+    border-color: #666;
+}
+
+body.dark-mode .btn-outline-primary {
+    color: #b0bec5;
+    border-color: #555;
+}
+
+body.dark-mode .btn-outline-primary:hover {
+    color: #ffffff;
+    background-color: #37474f;
+}
+
+/* Adjust muted text color for Dark Mode */
+body.dark-mode .text-muted {
+    color: #b0bec5 !important; /* Light gray for readability */
+}
+
+/* Dropdown Menu */
+body.dark-mode .dropdown-menu {
+    background-color: #1e1e1e;
+    border-color: #333;
+    color: #e0e0e0;
+}
+
+body.dark-mode .dropdown-item {
+    color: #e0e0e0;
+}
+
+body.dark-mode .dropdown-item:hover {
+    background-color: #37474f;
+    color: #ffffff;
+}
+
+/* Search Bar */
+body.dark-mode #search-bar-container input {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    border-color: #333;
+}
+
+body.dark-mode #search-bar-container input::placeholder {
+    color: #b0bec5;
+}
+
+/* Scrollbars */
+body.dark-mode #contact-list::-webkit-scrollbar,
+body.dark-mode #chat-window::-webkit-scrollbar {
+    width: 8px;
+}
+
+body.dark-mode #contact-list::-webkit-scrollbar-thumb,
+body.dark-mode #chat-window::-webkit-scrollbar-thumb {
+    background-color: #555;
+    border-radius: 4px;
+}
