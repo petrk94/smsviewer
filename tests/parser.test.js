@@ -31,14 +31,14 @@ test("parses SMS records split across arbitrary chunks", () => {
     assert.equal(result.records[1].kind, "sms");
 });
 
-test("parses MMS text and attachment metadata without retaining base64 media", () => {
+test("parses MMS text and retains base64 media attachment data", () => {
     const data = "A".repeat(1024 * 1024);
-    const xml = `<smses count="1"><mms date="1000" msg_box="1" address="+12125550123" contact_name="Bob">
+    const xml = `<smses count="1"><mms date="1000" msg_box="1" address="+121****0123" contact_name="Bob">
         <parts>
             <part seq="0" ct="text/plain" text="Hello from MMS" />
             <part seq="1" ct="image/jpeg" name="photo.jpg" data="${data}" />
         </parts>
-        <addrs><addr address="+12125550123" type="137" /></addrs>
+        <addrs><addr address="+121****0123" type="137" /></addrs>
     </mms></smses>`;
     const result = parseInChunks(xml, 4093);
     const record = result.records[0];
@@ -46,8 +46,8 @@ test("parses MMS text and attachment metadata without retaining base64 media", (
     assert.equal(record.body, "Hello from MMS");
     assert.equal(record.attachments.length, 1);
     assert.equal(record.attachments[0].name, "photo.jpg");
+    assert.equal(record.attachments[0].data, data);
     assert.equal(record.attachments[0].encodedBytes, data.length);
-    assert.equal(JSON.stringify(record).includes(data.slice(0, 100)), false);
 });
 
 test("derives an MMS address from addr elements when the top-level address is absent", () => {

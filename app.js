@@ -32,6 +32,8 @@ const state = {
 const elements = {
     uploadArea: document.getElementById("upload-area"),
     fileInput: document.getElementById("file-input"),
+    captureMediaCheckbox: document.getElementById("capture-media"),
+    importModeDescription: document.getElementById("import-mode-description"),
     status: document.getElementById("status-message"),
     progressPanel: document.getElementById("import-progress-panel"),
     progressTitle: document.getElementById("import-progress-title"),
@@ -117,6 +119,7 @@ function setImportingUI(importing) {
     state.importing = importing;
     elements.uploadArea.setAttribute("aria-disabled", String(importing));
     elements.fileInput.disabled = importing;
+    elements.captureMediaCheckbox.disabled = importing;
     elements.cancelImport.disabled = !importing;
     elements.progressPanel.hidden = !importing;
     elements.settingsButton.disabled = importing;
@@ -262,6 +265,7 @@ function prepareRecord(rawRecord, sequence, importId, country) {
         contentType: attachment.contentType || "application/octet-stream",
         name: attachment.name || "Attachment",
         contentLocation: attachment.contentLocation || null,
+        data: attachment.data || null,
         encodedBytes: Number(attachment.encodedBytes) || 0,
     }));
 
@@ -380,6 +384,7 @@ async function importBackup(file) {
         let lastYieldAt = performance.now();
 
         const parser = StreamParser.createParser({
+            captureMediaData: elements.captureMediaCheckbox.checked,
             onRoot(root) {
                 metadata.expectedRecords = root.count;
             },
@@ -632,10 +637,121 @@ function renderMessages(messages, { scrollToBottom = false } = {}) {
             const list = document.createElement("div");
             list.className = "attachment-list text-body-secondary";
             message.attachments.forEach((attachment) => {
-                const item = document.createElement("div");
-                const approximateBytes = Math.floor((attachment.encodedBytes || 0) * 0.75);
-                item.textContent = `${attachment.name} · ${attachment.contentType}${approximateBytes ? ` · about ${Core.formatBytes(approximateBytes)}` : ""}`;
-                list.appendChild(item);
+                const mediaType = String(attachment.contentType || "");
+                const isImage = mediaType.startsWith("image/");
+                const isVideo = mediaType.startsWith("video/");
+                const isAudio = mediaType.startsWith("audio/");
+
+                if ((isImage || isVideo || isAudio) && attachment.data) {
+                    const wrapper = document.createElement("div");
+                    wrapper.className = "media-attachment mb-1";
+                    const dataUri = `data:${attachment.contentType};base64,${attachment.data}`;
+
+                    if (isImage) {
+                        const container = document.createElement("div");
+                        container.className = "position-relative d-inline-block";
+
+                        const img = document.createElement("img");
+                        img.src = dataUri;
+                        img.alt = attachment.name || "Image attachment";
+                        img.className = "img-fluid rounded";
+                        img.style.maxHeight = "400px";
+                        img.loading = "lazy";
+                        container.appendChild(img);
+
+                        // HEIC and other unsupported formats fail silently in most browsers.
+                        // Replace the broken image with a download link so the user can open
+                        // it in a native viewer (e.g. iOS/macOS Photos for HEIC).
+                        img.onerror = () => {
+                            const placeholder = document.createElement("div");
+                            placeholder.className = "bg-light border rounded p-3 text-center";
+
+                            const icon = document.createElement("div");
+                            icon.className = "mb-2";
+                            icon.textContent = `🖼 ${attachment.name || attachment.contentType}`;
+                            placeholder.appendChild(icon);
+
+                            const msg = document.createElement("small");
+                            msg.className = "text-muted";
+                            const dl = document.createElement("a");
+                            dl.href = dataUri;
+                            dl.download = attachment.name || "attachment";
+                            dl.textContent = "Download";
+                            msg.append(
+                                `Your browser cannot display ${attachment.contentType} images. `,
+                                dl
+                            );
+                            placeholder.appendChild(msg);
+
+                            container.replaceChild(placeholder, img);
+                        };
+
+                        wrapper.appendChild(container);
+                    } else if (isVideo) {
+                        const video = document.createElement("video");
+                        video.src = dataUri;
+                        video.className = "img-fluid rounded";
+                        video.style.maxHeight = "400px";
+                        video.controls = true;
+                        video.preload = "metadata";
+                        wrapper.appendChild(video);
+                    } else if (isAudio) {
+                        const audio = document.createElement("audio");
+                        audio.src = dataUri;
+                        audio.controls = true;
+                        audio.preload = "metadata";
+                        audio.style.width = "100%";
+                        audio.style.maxWidth = "320px";
+                        audio.onerror = () => {
+                            const placeholder = document.createElement("div");
+                            placeholder.className = "bg-light border rounded p-3 text-center";
+                            const icon = document.createElement("div");
+                            icon.className = "mb-2";
+                            icon.textContent = `🎵 ${attachment.name || attachment.contentType}`;
+                            placeholder.appendChild(icon);
+                            const msg = document.createElement("small");
+                            msg.className = "text-muted";
+                            const dl = document.createElement("a");
+                            dl.href = dataUri;
+                            dl.download = attachment.name || "attachment";
+                            dl.textContent = "Download";
+                            msg.append(
+                                `Your browser cannot play ${attachment.contentType}. `,
+                                dl
+                            );
+                            placeholder.appendChild(msg);
+                            wrapper.replaceChild(placeholder, audio);
+                        };
+                        wrapper.appendChild(audio);
+                    }
+
+                    // Always show a download link + the attachment name below the media.
+                    const label = document.createElement("div");
+                    label.className = "small text-body-secondary mt-1";
+                    const dl = document.createElement("a");
+                    dl.href = dataUri;
+                    dl.download = attachment.name || "attachment";
+                    dl.textContent = "Download";
+                    label.append(`${attachment.name || attachment.contentType} · `, dl);
+                    wrapper.appendChild(label);
+                    list.appendChild(wrapper);
+                } else {
+                    const item = document.createElement("div");
+                    const approximateBytes = Math.floor((attachment.encodedBytes || 0) * 0.75);
+                    const label = `${attachment.name} · ${attachment.contentType}${approximateBytes ? ` · about ${Core.formatBytes(approximateBytes)}` : ""}`;
+                    item.textContent = label;
+
+                    if (attachment.data) {
+                        const dataUri = `data:${attachment.contentType};base64,${attachment.data}`;
+                        const dl = document.createElement("a");
+                        dl.href = dataUri;
+                        dl.download = attachment.name || "attachment";
+                        dl.textContent = "Download";
+                        dl.className = "ms-2";
+                        item.append(" · ", dl);
+                    }
+                    list.appendChild(item);
+                }
             });
             body.appendChild(list);
         }
@@ -1144,6 +1260,17 @@ function bindEvents() {
     elements.exportJSON.addEventListener("click", () => exportFullBackup("json"));
     elements.exportPDF.addEventListener("click", () => exportSelectedPDF().catch((error) => showStatus(error.message, "danger")));
     elements.printWindow.addEventListener("click", () => window.print());
+
+    elements.captureMediaCheckbox.addEventListener("change", () => {
+        const checked = elements.captureMediaCheckbox.checked;
+        if (checked) {
+            elements.importModeDescription.textContent =
+                "Media data will be stored in your browser. Disable for smaller, faster imports.";
+        } else {
+            elements.importModeDescription.textContent =
+                "Fast import: MMS media data is skipped. Text and attachment metadata are indexed. Re-import to load media.";
+        }
+    });
 }
 
 async function initialize() {

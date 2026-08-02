@@ -6,7 +6,7 @@
     <meta name="color-scheme" content="light dark">
     <meta
         http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
     >
     <meta name="description" content="Offline browser viewer for SMS Backup & Restore XML files.">
     <title>SMS Viewer and Exporter</title>
@@ -50,8 +50,16 @@
         >
             <h2 class="h5 mb-2">Select an SMS Backup &amp; Restore XML file</h2>
             <p class="mb-1">Drag and drop the file here, or click to browse.</p>
-            <p class="small text-body-secondary mb-0">
-                Large files are read as a stream. MMS media data is skipped; text and attachment details are indexed.
+            <div class="d-flex justify-content-center gap-3 mt-2 mb-2">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="capture-media" checked>
+                    <label class="form-check-label" for="capture-media">
+                        Load MMS media (images, videos)
+                    </label>
+                </div>
+            </div>
+            <p id="import-mode-description" class="small text-body-secondary mb-0">
+                Media data will be stored in your browser. Disable for smaller, faster imports.
             </p>
             <input id="file-input" type="file" accept=".xml,text/xml,application/xml" hidden>
         </section>

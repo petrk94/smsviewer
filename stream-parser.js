@@ -15,9 +15,10 @@
     const RELEVANT_TAGS = new Set(["smses", "sms", "mms", "part", "addr"]);
 
     class BackupXMLTokenizer {
-        constructor({ onRecord = () => {}, onRoot = () => {} } = {}) {
+        constructor({ onRecord = () => {}, onRoot = () => {}, captureMediaData = true } = {}) {
             this.onRecord = onRecord;
             this.onRoot = onRoot;
+            this.captureMediaData = captureMediaData;
             this.state = "TEXT";
             this.tagName = "";
             this.endTagName = "";
@@ -176,7 +177,11 @@
                             this.position += 1;
                         } else if (char === '"' || char === "'") {
                             this.quote = char;
-                            this.skipAttributeValue = this.tagName.toLowerCase() === "part" && this.attrName.toLowerCase() === "data";
+                            // Skip base64 data when media capture is disabled (fast import mode).
+                            // When enabled, the payload is needed to render inline images and video.
+                            this.skipAttributeValue = this.tagName.toLowerCase() === "part"
+                                && this.attrName.toLowerCase() === "data"
+                                && !this.captureMediaData;
                             index += 1;
                             this.position += 1;
                             this.state = "ATTR_VALUE";
@@ -344,11 +349,13 @@
                 if (contentType === "text/plain" && text) {
                     this.currentMMS.textParts.push({ sequence: Number.parseInt(attrs.seq || "0", 10) || 0, text });
                 } else if (contentType && contentType !== "application/smil") {
+                    const fallbackName = this.partNameFallback(attrs, contentType);
                     this.currentMMS.attachments.push({
                         contentType,
-                        name: this.firstUsable(attrs.name, attrs.fn, attrs.cl, "Attachment"),
-                        contentLocation: this.firstUsable(attrs.cl, null),
-                        encodedBytes: attrs.__dataLength || 0,
+                        name: fallbackName,
+                        contentLocation: this.firstUsable(attrs.cl, null) || fallbackName,
+                        data: attrs.data || null,
+                        encodedBytes: (attrs.data && attrs.data.length) || attrs.__dataLength || 0,
                     });
                 }
                 return;
@@ -430,6 +437,37 @@
         isUsable(value) {
             const text = String(value || "").trim();
             return Boolean(text && !["null", "undefined", "insert-address-token"].includes(text.toLowerCase()));
+        }
+
+        partNameFallback(attrs, contentType) {
+            const usable = this.firstUsable(attrs.name, attrs.fn, attrs.cl);
+            if (usable) return usable;
+
+            // Build a descriptive fallback from content type and sequence number.
+            const suffixMap = {
+                "image/jpeg": ".jpg",
+                "image/png": ".png",
+                "image/gif": ".gif",
+                "image/webp": ".webp",
+                "image/heic": ".heic",
+                "image/heif": ".heif",
+                "image/bmp": ".bmp",
+                "video/mp4": ".mp4",
+                "video/3gpp": ".3gp",
+                "video/mpeg": ".mpeg",
+                "video/quicktime": ".mov",
+                "audio/amr": ".amr",
+                "audio/aac": ".aac",
+                "audio/mpeg": ".mp3",
+                "audio/mp4": ".m4a",
+                "audio/vnd.qcelp": ".qcp",
+                "audio/3gpp": ".3ga",
+                "audio/ogg": ".ogg",
+            };
+            const suffix = suffixMap[contentType] || "";
+            const seq = Number.parseInt(attrs.seq || "0", 10) || 0;
+            const base = contentType ? contentType.replace("/", "_") : "attachment";
+            return `${base}${seq ? `_${seq}` : ""}${suffix}`;
         }
     }
 
