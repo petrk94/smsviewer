@@ -1010,6 +1010,51 @@ function splitPDFText(doc, text, maxWidth) {
     return output.length ? output : [""];
 }
 
+function getJsPDFFormat(contentType) {
+    const type = String(contentType || "").toLowerCase();
+    if (type === "image/jpeg" || type === "image/jpg") return "JPEG";
+    if (type === "image/png") return "PNG";
+    return null;
+}
+
+function parseImageDimensions(base64Data) {
+    try {
+        const binary = atob(base64Data);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i) & 0xFF;
+        }
+        if (bytes.length > 24 && bytes[0] === 0x89 && bytes[1] === 0x50 &&
+            bytes[2] === 0x4E && bytes[3] === 0x47 && bytes[4] === 0x0D &&
+            bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A) {
+            const width = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+            const height = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
+            if (width > 0 && height > 0) return { width, height };
+        }
+        if (bytes.length > 10 && bytes[0] === 0xFF && bytes[1] === 0xD8) {
+            let i = 2;
+            while (i < bytes.length - 8) {
+                if (bytes[i] !== 0xFF) { i++; continue; }
+                const marker = bytes[i + 1];
+                if (marker === 0x00 || marker === 0xFF) { i++; continue; }
+                if (marker >= 0xD0 && marker <= 0xD7) { i += 2; continue; }
+                if (marker === 0xDA) break;
+                const segLen = (bytes[i + 2] << 8) | bytes[i + 3];
+                if (segLen < 2) break;
+                if ((marker >= 0xC0 && marker <= 0xCF) && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC) {
+                    const height = (bytes[i + 5] << 8) | bytes[i + 6];
+                    const width = (bytes[i + 7] << 8) | bytes[i + 8];
+                    if (width > 0 && height > 0) return { width, height };
+                }
+                i += 2 + segLen;
+            }
+        }
+    } catch (_error) {
+        // Fall through to return null
+    }
+    return null;
+}
+
 async function exportSelectedPDF() {
     if (!state.selectedContact || !state.activeImport) return;
     if (!window.jspdf?.jsPDF) {
