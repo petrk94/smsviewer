@@ -1085,52 +1085,117 @@ async function exportSelectedPDF() {
     doc.line(margin.left, y, pageWidth - margin.right, y);
     y += 6;
 
-    messages.forEach((message, index) => {
-        const safeHeader = Core.preparePDFText(
-            `${index + 1}. ${Core.getMessageStatus(message.type, message.kind)} · ${formatMessageDate(message)}`
+    // Stream messages in batches to avoid holding the full conversation in memory.
+    let index = 0;
+    const BATCH_LIMIT = 500;
+    while (true) {
+        const batch = await DB.getContactMessageBatch(
+            state.activeImport.id,
+            state.selectedContact.contactKey,
+            index,
+            BATCH_LIMIT
         );
-        const sourceBody = message.body || (message.attachmentCount ? "[MMS attachment]" : "[Empty message]");
-        const safeBody = Core.preparePDFText(sourceBody);
-        replacedEmoji += safeHeader.emojiReplacements + safeBody.emojiReplacements;
-        replacedUnsupported += safeHeader.unsupportedReplacements + safeBody.unsupportedReplacements;
-
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10.5);
-        const lines = splitPDFText(doc, safeBody.text || "[Empty message]", contentWidth);
-        ensureSpace(headerLineHeight + Math.min(lines.length, 2) * bodyLineHeight + 4);
-
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(9.2);
-        doc.setTextColor(95);
-        doc.setCharSpace(0);
-        doc.text(safeHeader.text, margin.left, y);
-        y += headerLineHeight;
-
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10.5);
-        doc.setTextColor(30);
-        lines.forEach((line) => {
-            ensureSpace(bodyLineHeight);
-            doc.setCharSpace(0);
-            doc.text(line || " ", margin.left, y);
-            y += bodyLineHeight;
-        });
-
-        if (message.attachmentCount) {
-            const attachmentText = Core.preparePDFText(
-                `[${message.attachmentCount} MMS attachment(s) not embedded]`
+        if (!batch.length) break;
+        batch.forEach((message) => {
+            const safeHeader = Core.preparePDFText(
+                `${index + 1}. ${Core.getMessageStatus(message.type, message.kind)} · ${formatMessageDate(message)}`
             );
-            replacedEmoji += attachmentText.emojiReplacements;
-            replacedUnsupported += attachmentText.unsupportedReplacements;
-            ensureSpace(bodyLineHeight);
-            doc.setFontSize(9);
-            doc.setTextColor(95);
-            doc.text(attachmentText.text, margin.left, y);
-            y += bodyLineHeight;
-        }
+            const sourceBody = message.body || (message.attachmentCount ? "[MMS attachment]" : "[Empty message]");
+            const safeBody = Core.preparePDFText(sourceBody);
+            replacedEmoji += safeHeader.emojiReplacements + safeBody.emojiReplacements;
+            replacedUnsupported += safeHeader.unsupportedReplacements + safeBody.unsupportedReplacements;
 
-        y += 2.5;
-    });
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(10.5);
+            const lines = splitPDFText(doc, safeBody.text || "[Empty message]", contentWidth);
+            ensureSpace(headerLineHeight + Math.min(lines.length, 2) * bodyLineHeight + 4);
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(9.2);
+            doc.setTextColor(95);
+            doc.setCharSpace(0);
+            doc.text(safeHeader.text, margin.left, y);
+            y += headerLineHeight;
+
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(10.5);
+            doc.setTextColor(30);
+            lines.forEach((line) => {
+                ensureSpace(bodyLineHeight);
+                doc.setCharSpace(0);
+                doc.text(line || " ", margin.left, y);
+                y += bodyLineHeight;
+            });
+
+            if (message.attachments?.length) {
+                message.attachments.forEach((attachment) => {
+                    const mediaType = String(attachment.contentType || "");
+                    const isImage = mediaType.startsWith("image/");
+                    if (isImage && attachment.data) {
+                        const pdfFormat = getJsPDFFormat(attachment.contentType);
+                        if (pdfFormat) {
+                            try {
+                                const dims = parseImageDimensions(attachment.data);
+                                const maxImgW = contentWidth;
+                                const maxImgH = 120;
+                                let imgW = dims ? dims.width : maxImgW;
+                                let imgH = dims ? dims.height : maxImgH;
+                                if (imgW <= 0 || imgH <= 0) { imgW = maxImgW; imgH = maxImgH; }
+                                const scale = Math.min(maxImgW / imgW, maxImgH / imgH, 1);
+                                imgW *= scale;
+                                imgH *= scale;
+                                ensureSpace(imgH + 4);
+                                doc.addImage(attachment.data, pdfFormat, margin.left, y, imgW, imgH);
+                                y += imgH + 2;
+                            } catch (_error) {
+                                const errText = Core.preparePDFText(
+                                    `[Image could not be embedded: ${attachment.name || attachment.contentType}]`
+                                );
+                                ensureSpace(bodyLineHeight);
+                                doc.setFontSize(9);
+                                doc.setTextColor(95);
+                                doc.text(errText.text, margin.left, y);
+                                y += bodyLineHeight;
+                            }
+                        } else {
+                            const errText = Core.preparePDFText(
+                                `[${attachment.contentType || "image"} not supported in PDF: ${attachment.name || ""}]`
+                            );
+                            ensureSpace(bodyLineHeight);
+                            doc.setFontSize(9);
+                            doc.textColor(95);
+                            doc.text(errText.text, margin.left, y);
+                            y += bodyLineHeight;
+                        }
+                    } else {
+                        const label = Core.preparePDFText(
+                            `[${attachment.name || attachment.contentType || "attachment"}]`
+                        );
+                        ensureSpace(bodyLineHeight);
+                        doc.setFontSize(9);
+                        doc.setTextColor(95);
+                        doc.text(label.text, margin.left, y);
+                        y += bodyLineHeight;
+                    }
+                });
+            } else if (message.attachmentCount) {
+                const attachmentText = Core.preparePDFText(
+                    `[${message.attachmentCount} MMS attachment(s) not embedded]`
+                );
+                replacedEmoji += attachmentText.emojiReplacements;
+                replacedUnsupported += attachmentText.unsupportedReplacements;
+                ensureSpace(bodyLineHeight);
+                doc.setFontSize(9);
+                doc.setTextColor(95);
+                doc.text(attachmentText.text, margin.left, y);
+                y += bodyLineHeight;
+            }
+
+            y += 2.5;
+            index += 1;
+        });
+        if (batch.length < BATCH_LIMIT) break;
+    }
 
     const totalPages = doc.getNumberOfPages();
     for (let page = 1; page <= totalPages; page += 1) {
