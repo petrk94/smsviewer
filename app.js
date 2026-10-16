@@ -1197,7 +1197,7 @@ async function exportSelectedPDF() {
                             );
                             ensureSpace(bodyLineHeight);
                             doc.setFontSize(9);
-                            doc.textColor(95);
+                            doc.setTextColor(95);
                             doc.text(errText.text, margin.left, y);
                             y += bodyLineHeight;
                         }
