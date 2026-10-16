@@ -1016,21 +1016,10 @@ async function exportSelectedPDF() {
         showStatus("The local jsPDF library could not be loaded.", "danger");
         return;
     }
-    if (state.selectedContact.messageCount > PDF_MESSAGE_LIMIT) {
-        showStatus(
-            `PDF export is limited to ${Core.formatNumber(PDF_MESSAGE_LIMIT)} messages to avoid exhausting browser memory. Use CSV or JSON for this conversation.`,
-            "warning"
-        );
-        return;
-    }
+    // No hard message cap: batch streaming handles large conversations.
+    // (Previously limited to PDF_MESSAGE_LIMIT to avoid memory exhaustion.)
 
     showStatus("Preparing the PDF…", "info");
-    const messages = await DB.getContactMessageBatch(
-        state.activeImport.id,
-        state.selectedContact.contactKey,
-        0,
-        state.selectedContact.messageCount
-    );
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({
