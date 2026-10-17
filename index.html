@@ -127,7 +127,7 @@
                                 <li><button id="export-csv" class="dropdown-item" type="button">Full backup as CSV</button></li>
                                 <li><button id="export-json" class="dropdown-item" type="button">Full backup as JSON</button></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><button id="export-pdf" class="dropdown-item" type="button" disabled title="Creates a compact PDF. Unsupported emoji and scripts are replaced only in the PDF to prevent broken text spacing.">Selected conversation as PDF</button></li>
+                                <li><button id="export-pdf" class="dropdown-item" type="button" disabled title="Creates a compact PDF with embedded images. Unsupported emoji and scripts are replaced only in the PDF to prevent broken text spacing.">Selected conversation as PDF</button></li>
                             </ul>
                         </div>
                     </div>
@@ -202,6 +202,7 @@
     <script src="vendor/libphonenumber/libphonenumber-min.js"></script>
     <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
     <script src="vendor/jspdf/jspdf.umd.min.js"></script>
+    <script src="vendor/libheif-js/libheif-wasm/libheif.js"></script>
     <script src="core.js"></script>
     <script src="stream-parser.js"></script>
     <script src="db.js"></script>
