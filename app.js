@@ -1010,6 +1010,44 @@ function splitPDFText(doc, text, maxWidth) {
     return output.length ? output : [""];
 }
 
+function convertHeicToPng(base64Data) {
+    return new Promise((resolve, reject) => {
+        const nativeImg = document.createElement("img");
+        let nativeTimeout = setTimeout(() => tryWasmDecode(), 10000);
+        nativeImg.onload = () => {
+            clearTimeout(nativeTimeout);
+            try {
+                const canvas = document.createElement("canvas");
+                const w = Math.min(nativeImg.naturalWidth || nativeImg.width || 400, 1600);
+                const h = Math.min(nativeImg.naturalHeight || nativeImg.height || 300, 1200);
+                canvas.width = w; canvas.height = h;
+                const ctx = canvas.getContext("2d");
+                ctx.drawImage(nativeImg, 0, 0, w, h);
+                const pngDataUrl = canvas.toDataURL("image/png", 0.92);
+                resolve(pngDataUrl.split(",")[1]);
+            } catch (e) { reject(e); }
+        };
+        nativeImg.onerror = () => { clearTimeout(nativeTimeout); tryWasmDecode(); };
+        nativeImg.src = `data:image/heic;base64,${base64Data}`;
+        function tryWasmDecode() {
+            if (typeof libheif === "undefined" || !libheif.HeifDecoder) return reject(new Error("HEIC not supported"));
+            try {
+                const binary = atob(base64Data);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                const decoder = new libheif.HeifDecoder();
+                const images = decoder.decode(bytes.buffer);
+                if (!images || !images.length) return reject(new Error("HEIC decode: no images"));
+                const img = images[0];
+                const canvas = document.createElement("canvas");
+                canvas.width = Math.min(img.get_width(), 1600);
+                canvas.height = Math.min(img.get_height(), 1200);
+                img.display(canvas, () => resolve(canvas.toDataURL("image/png", 0.92).split(",")[1]));
+            } catch (e) { reject(e); }
+        }
+    });
+}
+
 function getJsPDFFormat(contentType) {
     const type = String(contentType || "").toLowerCase();
     if (type === "image/jpeg" || type === "image/jpg") return "JPEG";
@@ -1061,10 +1099,21 @@ async function exportSelectedPDF() {
         showStatus("The local jsPDF library could not be loaded.", "danger");
         return;
     }
-    // No hard message cap: batch streaming handles large conversations.
-    // (Previously limited to PDF_MESSAGE_LIMIT to avoid memory exhaustion.)
+    if (state.selectedContact.messageCount > PDF_MESSAGE_LIMIT) {
+        showStatus(
+            `PDF export is limited to ${Core.formatNumber(PDF_MESSAGE_LIMIT)} messages to avoid exhausting browser memory. Use CSV or JSON for this conversation.`,
+            "warning"
+        );
+        return;
+    }
 
     showStatus("Preparing the PDF…", "info");
+    const messages = await DB.getContactMessageBatch(
+        state.activeImport.id,
+        state.selectedContact.contactKey,
+        0,
+        state.selectedContact.messageCount
+    );
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({
@@ -1119,57 +1168,60 @@ async function exportSelectedPDF() {
     doc.line(margin.left, y, pageWidth - margin.right, y);
     y += 6;
 
-    // Stream messages in batches to avoid holding the full conversation in memory.
-    let index = 0;
-    const BATCH_LIMIT = 500;
-    while (true) {
-        const batch = await DB.getContactMessageBatch(
-            state.activeImport.id,
-            state.selectedContact.contactKey,
-            index,
-            BATCH_LIMIT
+    for (let index = 0; index < messages.length; index += 1) {
+        const message = messages[index];
+        const safeHeader = Core.preparePDFText(
+            `${index + 1}. ${Core.getMessageStatus(message.type, message.kind)} · ${formatMessageDate(message)}`
         );
-        if (!batch.length) break;
-        batch.forEach((message) => {
-            const safeHeader = Core.preparePDFText(
-                `${index + 1}. ${Core.getMessageStatus(message.type, message.kind)} · ${formatMessageDate(message)}`
-            );
-            const sourceBody = message.body || (message.attachmentCount ? "[MMS attachment]" : "[Empty message]");
-            const safeBody = Core.preparePDFText(sourceBody);
-            replacedEmoji += safeHeader.emojiReplacements + safeBody.emojiReplacements;
-            replacedUnsupported += safeHeader.unsupportedReplacements + safeBody.unsupportedReplacements;
+        const sourceBody = message.body || (message.attachmentCount ? "[MMS attachment]" : "[Empty message]");
+        const safeBody = Core.preparePDFText(sourceBody);
+        replacedEmoji += safeHeader.emojiReplacements + safeBody.emojiReplacements;
+        replacedUnsupported += safeHeader.unsupportedReplacements + safeBody.unsupportedReplacements;
 
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(10.5);
-            const lines = splitPDFText(doc, safeBody.text || "[Empty message]", contentWidth);
-            ensureSpace(headerLineHeight + Math.min(lines.length, 2) * bodyLineHeight + 4);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10.5);
+        const lines = splitPDFText(doc, safeBody.text || "[Empty message]", contentWidth);
+        ensureSpace(headerLineHeight + Math.min(lines.length, 2) * bodyLineHeight + 4);
 
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(9.2);
-            doc.setTextColor(95);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.2);
+        doc.setTextColor(95);
+        doc.setCharSpace(0);
+        doc.text(safeHeader.text, margin.left, y);
+        y += headerLineHeight;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10.5);
+        doc.setTextColor(30);
+        lines.forEach((line) => {
+            ensureSpace(bodyLineHeight);
             doc.setCharSpace(0);
-            doc.text(safeHeader.text, margin.left, y);
-            y += headerLineHeight;
+            doc.text(line || " ", margin.left, y);
+            y += bodyLineHeight;
+        });
 
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(10.5);
-            doc.setTextColor(30);
-            lines.forEach((line) => {
-                ensureSpace(bodyLineHeight);
-                doc.setCharSpace(0);
-                doc.text(line || " ", margin.left, y);
-                y += bodyLineHeight;
-            });
-
-            if (message.attachments?.length) {
-                message.attachments.forEach((attachment) => {
+        if (message.attachments?.length) {
+            await (async () => {
+                for (const attachment of message.attachments) {
                     const mediaType = String(attachment.contentType || "");
                     const isImage = mediaType.startsWith("image/");
+                    const isVideo = mediaType.startsWith("video/");
+                    const isAudio = mediaType.startsWith("audio/");
+
                     if (isImage && attachment.data) {
-                        const pdfFormat = getJsPDFFormat(attachment.contentType);
-                        if (pdfFormat) {
+                        let pdfFormat = getJsPDFFormat(attachment.contentType);
+                        let imgData = attachment.data;
+                        if ((mediaType === "image/heic" || mediaType === "image/heif") && !pdfFormat) {
                             try {
-                                const dims = parseImageDimensions(attachment.data);
+                                imgData = await convertHeicToPng(attachment.data);
+                                pdfFormat = "PNG";
+                            } catch (_e) {
+                                imgData = null;
+                            }
+                        }
+                        if (pdfFormat && imgData) {
+                            try {
+                                const dims = parseImageDimensions(imgData);
                                 const maxImgW = contentWidth;
                                 const maxImgH = 120;
                                 let imgW = dims ? dims.width : maxImgW;
@@ -1179,7 +1231,7 @@ async function exportSelectedPDF() {
                                 imgW *= scale;
                                 imgH *= scale;
                                 ensureSpace(imgH + 4);
-                                doc.addImage(attachment.data, pdfFormat, margin.left, y, imgW, imgH);
+                                doc.addImage(imgData, pdfFormat, margin.left, y, imgW, imgH);
                                 y += imgH + 2;
                             } catch (_error) {
                                 const errText = Core.preparePDFText(
@@ -1201,6 +1253,24 @@ async function exportSelectedPDF() {
                             doc.text(errText.text, margin.left, y);
                             y += bodyLineHeight;
                         }
+                    } else if (isVideo) {
+                        const label = Core.preparePDFText(
+                            `[Video: ${attachment.name || attachment.contentType || "video"}]`
+                        );
+                        ensureSpace(bodyLineHeight);
+                        doc.setFontSize(9);
+                        doc.setTextColor(95);
+                        doc.text(label.text, margin.left, y);
+                        y += bodyLineHeight;
+                    } else if (isAudio) {
+                        const label = Core.preparePDFText(
+                            `[Audio: ${attachment.name || attachment.contentType || "audio"}]`
+                        );
+                        ensureSpace(bodyLineHeight);
+                        doc.setFontSize(9);
+                        doc.setTextColor(95);
+                        doc.text(label.text, margin.left, y);
+                        y += bodyLineHeight;
                     } else {
                         const label = Core.preparePDFText(
                             `[${attachment.name || attachment.contentType || "attachment"}]`
@@ -1211,24 +1281,11 @@ async function exportSelectedPDF() {
                         doc.text(label.text, margin.left, y);
                         y += bodyLineHeight;
                     }
-                });
-            } else if (message.attachmentCount) {
-                const attachmentText = Core.preparePDFText(
-                    `[${message.attachmentCount} MMS attachment(s) not embedded]`
-                );
-                replacedEmoji += attachmentText.emojiReplacements;
-                replacedUnsupported += attachmentText.unsupportedReplacements;
-                ensureSpace(bodyLineHeight);
-                doc.setFontSize(9);
-                doc.setTextColor(95);
-                doc.text(attachmentText.text, margin.left, y);
-                y += bodyLineHeight;
-            }
+                }
+            })();
+        }
 
-            y += 2.5;
-            index += 1;
-        });
-        if (batch.length < BATCH_LIMIT) break;
+        y += 2.5;
     }
 
     const totalPages = doc.getNumberOfPages();
@@ -1251,14 +1308,20 @@ async function exportSelectedPDF() {
     doc.save(`Messages_${safeName}.pdf`);
 
     const replacementCount = replacedEmoji + replacedUnsupported;
-    if (replacementCount) {
-        const details = [
-            replacedEmoji ? `${Core.formatNumber(replacedEmoji)} emoji` : "",
-            replacedUnsupported ? `${Core.formatNumber(replacedUnsupported)} other unsupported character(s)` : "",
-        ].filter(Boolean).join(" and ");
+    const embeddedImages = messages.flatMap((m) =>
+        (m.attachments || []).filter((a) =>
+            String(a.contentType || "").startsWith("image/") &&
+            getJsPDFFormat(a.contentType) && a.data
+        ).length
+    );
+    if (replacementCount || embeddedImages) {
+        const parts = [];
+        if (embeddedImages) parts.push(`${Core.formatNumber(embeddedImages)} image(s) embedded`);
+        if (replacedEmoji) parts.push(`${Core.formatNumber(replacedEmoji)} emoji`);
+        if (replacedUnsupported) parts.push(`${Core.formatNumber(replacedUnsupported)} other unsupported character(s)`);
         showStatus(
-            `The PDF was created cleanly. ${details} were replaced only in the PDF to prevent broken spacing. The original text remains unchanged in the viewer, CSV, and JSON exports.`,
-            "warning"
+            `The PDF was created successfully. ${parts.join(", ")} were handled in the PDF. The original text remains unchanged in the viewer, CSV, and JSON exports.`,
+            embeddedImages ? "success" : "warning"
         );
     } else {
         showStatus("The PDF was created successfully.", "success");
