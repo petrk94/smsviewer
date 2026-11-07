@@ -14,7 +14,7 @@ Turn the repaired Version 1 prototype into an offline, country-independent, larg
 6. **IndexedDB storage instead of complete in-memory data storage**
 7. **A maximum of 200 rendered messages at once**
 8. **Progress and cancellation for long imports**
-9. **Text-focused MMS support while skipping large media payloads**
+9. **Optional MMS media capture (enabled by default), with a text/metadata-only import option**
 10. **Release checklist, integrity manifest, and automated tests**
 
 ## Dependency and license status
@@ -55,7 +55,7 @@ Version 2 removes the original full-file `FileReader`/`DOMParser` path. The XML 
 
 The UI also avoids rendering entire long conversations. It loads at most 200 messages into the conversation window at a time. Contact rendering is limited to 500 results, with search available for narrowing large contact sets.
 
-MMS `data` attributes can contain very large base64 values. Version 2 counts and skips those values while retaining MMS text and attachment metadata. This prevents media payloads from being copied into application memory and IndexedDB.
+MMS `data` attributes can contain very large base64 values. With media capture disabled, Version 2 counts and skips those values while retaining MMS text and attachment metadata. With capture enabled (the default), media payloads are retained in memory during parsing and stored in IndexedDB.
 
 ## Important limits that remain explicit
 
@@ -63,7 +63,7 @@ MMS `data` attributes can contain very large base64 values. Version 2 counts and
 - Direct `file://` use is less reliable than localhost or HTTPS for persistent storage and streaming file export.
 - PDF export is intentionally limited to 5,000 messages.
 - The direct jsPDF export deliberately substitutes emoji and unsupported scripts to keep its compact selectable-text PDF stable. Exact emoji and non-Latin glyphs remain available through browser printing of the current 200-message page.
-- MMS media is not decoded or previewed in Version 2. Attachment type, name, and approximate encoded size are displayed.
+- Loaded MMS media can be previewed when the browser supports its format and downloaded separately. Media capture increases memory and storage requirements.
 - Full-backup search across every contact is not included. Conversation search scans the selected contact's indexed messages.
 
 ## Remaining release gates
@@ -82,3 +82,9 @@ Update screenshots and repository URLs, complete the remaining browser and MMS c
 ## Recommended release classification
 
 Version 2.0.0 is suitable as a major release candidate after the real-file verification above. The storage model, import pipeline, number normalization, interface, and bundled dependency strategy are sufficiently different from Version 1 to justify a major version.
+
+## Local storage notice and deletion
+
+A startup notice appears before import restoration and country onboarding unless the browser’s `smsviewer.privacyNotice.v1.dismissed` localStorage preference is `true`. Users can reopen it from the main page and change that choice. A permanent reminder and deletion button explain retention after reload/window close. There is no unload warning or unload-based deletion.
+
+Deletion clears `imports`, `contacts`, and `messages` in one completed IndexedDB transaction, preserving settings and localStorage preferences. The UI invalidates pending search/page results and clears the pending file. Cross-tab coordination is not implemented: users must close other app tabs before deleting. Original files and exports remain outside the deletion scope. See README and SECURITY for the storage inventory and limitations.

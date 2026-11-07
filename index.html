@@ -38,6 +38,16 @@
             </div>
         </header>
 
+        <section class="alert alert-secondary no-print" aria-labelledby="local-data-title">
+            <h2 id="local-data-title" class="h6">Your data stays in this browser until you delete it</h2>
+            <p class="small mb-2">Imported messages, contact details, photos, and other loaded MMS media are stored locally in this browser profile. They are not uploaded or synced to the internet. Reloading or closing this window does not delete them.</p>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <button id="clear-local-data" class="btn btn-outline-danger btn-sm" type="button">Delete stored messages and media</button>
+                <button id="privacy-info" class="btn btn-link btn-sm" type="button">About local storage</button>
+                <span class="small">Delete sensitive data here before closing. Original files and downloads must be deleted separately.</span>
+            </div>
+        </section>
+
         <div id="status-message" class="alert py-2 status-line no-print" role="status" aria-live="polite" hidden></div>
 
         <section
@@ -170,6 +180,29 @@
         </footer>
     </main>
 
+    <div id="privacy-modal" class="modal fade" tabindex="-1" aria-labelledby="privacy-modal-title" aria-describedby="privacy-modal-description" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="privacy-modal-title" class="modal-title h5">Before you import: local data storage</h2>
+                </div>
+                <div id="privacy-modal-description" class="modal-body">
+                    <p>Messages, SMS, contact details, photos, and other MMS media loaded into this app are stored locally in your browser profile. This app does not upload them or sync them to the internet.</p>
+                    <p><strong>Your data remains stored after reloading the page or closing the tab or window.</strong> The last completed import is restored when you open the app again.</p>
+                    <p>You control when to delete this data. For sensitive information or a shared computer, use <strong>Delete stored messages and media</strong> on the main page before closing the window. Anyone with access to the same browser profile may be able to access stored messages.</p>
+                    <p class="small text-body-secondary">Deletion removes the app’s stored import, including loaded media. Country and display settings are kept. Original XML files, downloaded attachments, and exports must be deleted separately. The app cannot guarantee secure erasure of disk remnants or backups.</p>
+                    <div class="form-check">
+                        <input id="hide-privacy-notice" class="form-check-input" type="checkbox">
+                        <label class="form-check-label" for="hide-privacy-notice">Do not show this notice again in this browser</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="privacy-continue" class="btn btn-primary" type="button">Understood — continue</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="country-modal" class="modal fade" tabindex="-1" aria-labelledby="country-modal-title" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -192,7 +225,6 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button id="clear-local-data" class="btn btn-outline-danger me-auto" type="button" disabled>Clear local message index</button>
                     <button id="save-country" class="btn btn-primary" type="button">Save and continue</button>
                 </div>
             </div>

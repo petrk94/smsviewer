@@ -84,7 +84,7 @@ The `--bind 127.0.0.1` option keeps the temporary server available only on the s
 - Conversations use a window of at most 200 rendered messages at a time.
 - Imports show progress and can be cancelled safely.
 - SMS and MMS text records are supported.
-- MMS attachment metadata is shown, while large base64 media payloads are skipped during indexing.
+- MMS attachment metadata is shown. With **Load MMS media** enabled (the default), photos, audio, video, and other attachment payloads are also stored locally. Disable it before importing to skip media payloads.
 - Full-backup CSV and JSON exports can stream directly to disk in supported browsers.
 - The application remains entirely client-side: message contents are not uploaded by this project.
 
@@ -100,7 +100,7 @@ Supported records:
 
 Not currently displayed:
 
-- decoded MMS images, audio, or video
+- media formats that the current browser cannot decode (download available when media was loaded)
 - call-log backups under a `<calls>` root element
 - encrypted or compressed backups that have not first been extracted by the user
 
@@ -122,7 +122,7 @@ A number beginning with `+` or `00` is parsed as an international number regardl
 Version 2 does not promise that every multi-gigabyte backup will fit within every browser's local storage quota. It is designed to avoid the two most common failure modes:
 
 1. The XML file is never converted into one complete in-memory DOM tree.
-2. MMS base64 media values are scanned and skipped rather than retained in JavaScript memory or IndexedDB.
+2. With **Load MMS media** disabled, MMS base64 payloads are scanned and skipped rather than retained in JavaScript memory or IndexedDB. With it enabled, media is stored and can substantially increase memory and storage use.
 
 Messages are written to IndexedDB in batches. Only one 200-message conversation window is rendered at a time. For backups containing very large amounts of text, the browser still needs enough local storage for the indexed message text and metadata.
 
@@ -139,13 +139,27 @@ Chromium-based browsers in a secure context can stream CSV and JSON directly to 
 
 ## Privacy and security
 
-- The backup is processed locally in the browser.
-- Production HTML references only local scripts and stylesheets.
-- The Content Security Policy blocks network connections from the application.
-- No analytics, tracking, remote fonts, advertisements, or upload endpoint are included.
-- A local IndexedDB index remains in the browser so the last completed import can be restored after reload.
+The application processes backups locally. It does not upload messages or sync them to the internet. Production HTML references only local scripts and stylesheets, and the Content Security Policy blocks application network connections. No analytics, tracking, remote fonts, advertisements, or upload endpoint are included.
 
-Anyone with access to the same browser profile may be able to access that local index. Clear the site's browser storage when working on a shared computer.
+**Closing the tab or window, refreshing the page, or restarting the browser does not delete imported data.** The last completed import is restored automatically. A startup notice explains this before the app restores an import or asks for a backup’s country. Select **Do not show this notice again in this browser** to hide future startup notices. You can reopen it at any time with **About local storage** on the main page and uncheck that option to show it again on subsequent starts. There is no close-window warning.
+
+### What is stored
+
+- IndexedDB database `sms-viewer-v2`: `imports` holds the original filename, size, import times, and counts; `contacts` holds contact details; `messages` holds SMS/MMS text, numbers, dates, and attachment metadata. Loaded media is stored as base64 in message attachments. **Load MMS media** is enabled by default; disabling it affects the next import, not an existing one.
+- IndexedDB `settings`: the selected default country.
+- `localStorage`: `theme` and `smsviewer.privacyNotice.v1.dismissed` (whether to hide the startup notice).
+
+The original XML file is read as a stream; the app does not save a complete XML copy or a persistent handle to that file. The indexed contents can still be just as sensitive as the original. Storage belongs to the browser profile and site origin; behavior for direct `file://` pages varies between browsers.
+
+### How to delete imported data
+
+Use **Delete stored messages and media** on the main page. This removes the stored import metadata, contacts, messages, and loaded media from this app’s database and clears the displayed conversation. Country, theme, and startup-notice preferences are kept. Wait for the deletion-success message; an error means deletion could not be confirmed. During an import, cancel it and wait for cleanup before deleting again if needed.
+
+To remove settings as well, use the browser’s site-data controls to remove storage for the app’s exact address. Clearing cookies alone or using a hard reload is not a reliable substitute for removing IndexedDB/site storage. For a directly opened `file://` page, use the browser’s storage/developer tools for that page; storage handling is browser-dependent.
+
+**You are responsible for manually deleting sensitive local data before leaving a shared computer or closing the app.** Anyone with access to the same browser profile may be able to access stored content. The maintainers cannot remotely inspect or delete this local data. Close other SMS Viewer tabs before deleting, since they may still hold displayed content or be processing an import.
+
+The app’s delete button does not delete the original XML file, downloaded attachments, CSV/JSON/PDF exports, saved printouts, or external backups. Delete those separately where necessary. Browser deletion removes app-accessible records; it does not guarantee forensic erasure of disk remnants, operating-system caches, or backups.
 
 ## Installation for developers
 
