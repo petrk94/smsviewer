@@ -97,6 +97,13 @@ def main() -> None:
             page.set_content(production_markup_without_assets(), wait_until="load")
             add_local_assets(page)
 
+            page.locator("#privacy-modal").wait_for(state="visible")
+            assert not page.locator("#country-modal").is_visible()
+            assert "closing the tab or window" in page.locator("#privacy-modal").text_content()
+            page.check("#hide-privacy-notice")
+            page.click("#privacy-continue")
+            page.locator("#privacy-modal").wait_for(state="hidden")
+
             page.locator("#country-modal").wait_for(state="visible")
             page.select_option("#country-select", "DE")
             page.click("#save-country")
@@ -145,6 +152,23 @@ def main() -> None:
             )
             assert "+491761234567" in contact_keys
             assert "+12125550123" in contact_keys
+
+            # Deletion is available on the main page, including without an active import.
+            page.click("#clear-local-data")
+            page.wait_for_function("document.querySelector('#status-message').textContent.includes('were deleted')")
+            assert page.locator("#chat-window .message-row").count() == 0
+            assert page.evaluate("SMSViewerDB.getActiveImport()") is None
+            assert page.evaluate("SMSViewerDB.getMessageBatch('active')") == []
+            assert page.evaluate("SMSViewerDB.getContacts('active')") == []
+            assert page.evaluate("SMSViewerDB.getSetting('defaultCountry')") == "DE"
+            assert page.locator("#clear-local-data").is_enabled()
+
+            page.click("#privacy-info")
+            page.locator("#privacy-modal").wait_for(state="visible")
+            assert page.locator("#hide-privacy-notice").is_checked()
+            page.uncheck("#hide-privacy-notice")
+            page.click("#privacy-continue")
+            page.locator("#privacy-modal").wait_for(state="hidden")
 
             browser.close()
 

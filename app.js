@@ -15,6 +15,7 @@ const DATABASE_BATCH_SIZE = 500;
 const EXPORT_BATCH_SIZE = 1000;
 const FALLBACK_EXPORT_MESSAGE_LIMIT = 100000;
 const PDF_MESSAGE_LIMIT = 5000;
+const PRIVACY_NOTICE_KEY = "smsviewer.privacyNotice.v1.dismissed";
 
 const state = {
     defaultCountry: null,
@@ -63,6 +64,10 @@ const elements = {
     countrySelect: document.getElementById("country-select"),
     saveCountry: document.getElementById("save-country"),
     clearLocalData: document.getElementById("clear-local-data"),
+    privacyInfo: document.getElementById("privacy-info"),
+    privacyModal: document.getElementById("privacy-modal"),
+    hidePrivacyNotice: document.getElementById("hide-privacy-notice"),
+    privacyContinue: document.getElementById("privacy-continue"),
     exportMenuButton: document.getElementById("export-menu-button"),
     exportCSV: document.getElementById("export-csv"),
     exportJSON: document.getElementById("export-json"),
@@ -71,6 +76,7 @@ const elements = {
 };
 
 let countryModal = null;
+let privacyModal = null;
 let conversationSearchTimer = null;
 
 class ImportCancelledError extends Error {
@@ -138,7 +144,7 @@ function updateControlStates() {
     elements.exportMenuButton.disabled = !hasImport || disabledByImport;
     elements.exportPDF.disabled = !hasSelection || disabledByImport;
     elements.printWindow.disabled = !hasSelection || disabledByImport;
-    elements.clearLocalData.disabled = !hasImport || disabledByImport;
+    elements.clearLocalData.disabled = disabledByImport;
 }
 
 function updateProgress(bytesRead, totalBytes, details) {
@@ -162,6 +168,14 @@ function populateCountryOptions() {
 
     const inferred = Core.inferCountryFromLocale(navigator.language) || "US";
     elements.countrySelect.value = inferred;
+}
+
+function showPrivacyNotice() {
+    elements.hidePrivacyNotice.checked = readLocalPreference(PRIVACY_NOTICE_KEY) === "true";
+    return new Promise((resolve) => {
+        elements.privacyModal.addEventListener("hidden.bs.modal", resolve, { once: true });
+        privacyModal.show();
+    });
 }
 
 function showCountrySettings() {
@@ -772,6 +786,7 @@ function renderMessages(messages, { scrollToBottom = false } = {}) {
 
 async function loadConversationPage(pageIndex, scrollToBottom = false) {
     if (!state.selectedContact || !state.activeImport) return;
+    const token = ++state.searchToken;
     const total = state.selectedContact.messageCount;
     const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
     state.pageIndex = Math.max(0, Math.min(pageIndex, pageCount - 1));
@@ -782,6 +797,7 @@ async function loadConversationPage(pageIndex, scrollToBottom = false) {
     setEmptyConversation("Loading messages…");
 
     const messages = await DB.getMessagePage(state.activeImport.id, state.selectedContact.contactKey, offset, PAGE_SIZE);
+    if (token !== state.searchToken) return;
     renderMessages(messages, { scrollToBottom });
 
     const start = total ? offset + 1 : 0;
@@ -1168,7 +1184,11 @@ async function exportSelectedPDF() {
 
 async function clearLocalMessageIndex() {
     if (state.importing) return;
+    state.searchToken += 1;
+    clearTimeout(conversationSearchTimer);
     await DB.clearImportData();
+    state.pendingFile = null;
+    elements.fileInput.value = "";
     state.activeImport = null;
     state.contacts = [];
     state.contactMap.clear();
@@ -1184,7 +1204,7 @@ async function clearLocalMessageIndex() {
     renderContacts();
     setEmptyConversation();
     updateControlStates();
-    showStatus("The local message index was cleared. The selected country setting was kept.", "success");
+    showStatus("Stored messages, contacts, and loaded media were deleted from this browser. Country and display settings were kept. Original files and downloads were not deleted.", "success");
 }
 
 async function restoreExistingImport() {
@@ -1252,6 +1272,11 @@ function bindEvents() {
         loadConversationPage(last, true).catch(console.error);
     });
 
+    elements.privacyInfo.addEventListener("click", () => showPrivacyNotice());
+    elements.privacyContinue.addEventListener("click", () => {
+        writeLocalPreference(PRIVACY_NOTICE_KEY, String(elements.hidePrivacyNotice.checked));
+        privacyModal.hide();
+    });
     elements.settingsButton.addEventListener("click", showCountrySettings);
     elements.saveCountry.addEventListener("click", () => saveCountrySetting().catch((error) => showStatus(error.message, "danger")));
     elements.clearLocalData.addEventListener("click", () => clearLocalMessageIndex().catch((error) => showStatus(error.message, "danger")));
@@ -1277,9 +1302,14 @@ async function initialize() {
     initializeTheme();
     populateCountryOptions();
     countryModal = new bootstrap.Modal(elements.countryModal);
+    privacyModal = new bootstrap.Modal(elements.privacyModal);
     bindEvents();
     setEmptyConversation();
     updateControlStates();
+
+    if (readLocalPreference(PRIVACY_NOTICE_KEY) !== "true") {
+        await showPrivacyNotice();
+    }
 
     try {
         await DB.openDatabase();

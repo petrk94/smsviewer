@@ -6,7 +6,7 @@
   "license": "MIT",
   "scripts": {
     "vendor": "node scripts/copy-vendor.mjs",
-    "test": "node --test tests/core.test.js tests/parser.test.js tests/db.test.js tests/static.test.js",
+    "test": "node --test tests/core.test.js tests/parser.test.js tests/db.test.js tests/static.test.js tests/privacy.test.js",
     "test:performance": "node --test tests/performance.test.js",
     "test:browser": "python3 tests/browser_smoke.py",
     "test:syntax": "node --check core.js && node --check stream-parser.js && node --check db.js && node --check app.js",
