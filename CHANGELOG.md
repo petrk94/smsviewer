@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## 2.1.0
+
+### Added
+
+- Startup notice explaining browser storage and how to delete imported data. Users can hide future notices and reopen them from the main page.
+- Persistent storage reminder and a main-page button to delete stored messages, contacts, and media.
+- MMS image, video, and audio previews for formats supported by the browser, with attachment downloads and an option to skip media payloads at import.
+- Optional Docker deployment with nginx.
+
+### Fixed
+
+- Pending conversation page and search results are invalidated when stored data is deleted.
+
 ## 2.0.0 - 2026-07-26
 
 ### Added
